@@ -4,7 +4,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="대표님 미팅">
-<title>대표님 미팅 노트</title>
+<title>대표님 미팅 노트</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233a5bd9'/%3E%3Cpath d='M18 44 L40 22 L46 28 L24 50 L16 52 Z' fill='white'/%3E%3C/svg%3E"><link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233a5bd9'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#f4f3f0;--card:#fff;--ink:#1c1c1e;--sub:#6c6c72;--line:#e2e0db;--soft:#eeece8;--acc:#3a5bd9;--acc2:#e8edff;--ok:#2f9e6a;--ok2:#e3f5ec;--warn:#b7791f;--warn2:#fdf3e1;--no:#c2453d;--no2:#fbe9e7;--r:14px}
 @media (prefers-color-scheme:dark){:root{--bg:#121214;--card:#1d1d20;--ink:#f1f1f3;--sub:#a3a3aa;--line:#2f2f35;--soft:#28282d;--acc:#8aa2ff;--acc2:#262d4a;--ok:#52c48c;--ok2:#1d3328;--warn:#e0b45a;--warn2:#3a2f19;--no:#ff7a70;--no2:#3b2120}}
@@ -110,6 +110,9 @@ details.more{margin-top:8px}details.more summary{font-size:13px;color:var(--acc)
 .pad .wrapc{flex:1;position:relative;overflow:hidden;background:#fff}
 .pad canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .pad .hint{position:absolute;left:10px;bottom:10px;font-size:12px;color:#888;pointer-events:none}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:80;max-width:90vw;text-align:center}.toast.on{opacity:1;transform:translateX(-50%)}
+.viewer{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px}.viewer.open{display:flex}.viewer img{max-width:94vw;max-height:84vh;border-radius:8px}.viewer span{color:#ddd;font-size:13px}
+.gl{border-bottom:1.5px dotted var(--acc);cursor:help}
 .export pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:10px;border-radius:10px;max-height:300px;overflow:auto}
 </style></head>
 <body>
@@ -129,6 +132,7 @@ details.more{margin-top:8px}details.more summary{font-size:13px;color:var(--acc)
 <main id="main"></main>
 <div class="fab"><button class="f1" id="fQuick">빠른 메모</button><button class="f2" id="fPen">✎ 펜</button></div>
 
+<div class="toast" id="toast"></div><div class="viewer" id="viewer" onclick="this.classList.remove('open')"><img alt="사진 크게 보기"><span>아무 데나 누르면 닫혀요</span></div>
 <div class="sheet" id="sheet"><div class="in" id="sheetIn"></div></div>
 <div class="pad" id="pad"><div class="box" id="padBox">
  <div class="bar">
@@ -195,6 +199,23 @@ function now(){ return new Date().toISOString(); }
 function el(h){ var t=document.createElement("template"); t.innerHTML=h.trim(); return t.content.firstChild; }
 var STL={asked:"물어봄",later:"나중에",skip:"안 물어도 됨"};
 
+
+
+/* ---------- 용어 풀이 ---------- */
+var GLOSS = [["허브", "우리가 만들고 있는 프로그램이에요. 스튜디오 컴퓨터에서 돌면서 사진 받기 · 정리 · 선수별로 나누기 · 납품을 도와줘요."], ["현황판", "허브를 켜면 보이는 첫 화면이에요. 오늘 할 일 · 일정 · 진행 상황을 한눈에 보여 줘요."], ["원본", "카메라가 찍은 그대로의 사진 파일이에요. 보정하거나 이름을 바꾸기 전 것."], ["RAW", "카메라가 찍은 그대로 저장하는 큰 사진 파일 종류예요(.CR3 · .NEF · .ARW 등). 보정할 여유가 커요."], ["JPEG", "흔히 쓰는 사진 파일(.jpg)이에요. 작고 어디서나 바로 열려요."], ["셀렉", "많은 사진 가운데 쓸 사진을 고르는 일이에요."], ["1차 셀렉", "사람이 보기 전에 허브가 먼저 후보를 골라 두는 것. 사람이 마지막에 고쳐요."], ["정답지", "대표님이 실제로 고른 사진 목록이에요. 허브가 맞게 골랐는지 견주는 기준이 돼요."], ["라이트룸", "어도비의 사진 고르기 · 보정 프로그램이에요. 'Classic'은 컴퓨터에 깔아 쓰는 판."], ["카탈로그", "라이트룸이 별점 · 보정 기록을 모아 두는 파일(.lrcat)이에요. 이걸 받으면 대표님이 무엇을 골랐는지 알 수 있어요."], [".lrcat", "라이트룸 카탈로그 파일의 끝 이름이에요."], ["캡처원", "사진 고르기 · 보정 프로그램(Capture One)이에요. 라이트룸과 비슷해요."], ["포토 메카닉", "사진을 아주 빨리 훑어 고르는 프로그램(Photo Mechanic)이에요."], ["프리셋", "보정 값을 묶어 저장한 것이에요. 누르면 여러 사진에 같은 느낌이 한 번에 입혀져요."], ["별점", "라이트룸에서 사진에 붙이는 ★1~5 표시예요. 스튜디오마다 뜻이 달라요."], ["색 라벨", "라이트룸에서 사진에 붙이는 색 표시(빨강 · 초록 등)예요."], ["테더링", "카메라를 선으로 컴퓨터에 이어서, 찍자마자 컴퓨터로 사진이 들어오게 하는 방법이에요."], ["메모리 카드", "카메라 안에 꽂는 저장 카드(SD 카드 등)예요. 줄여서 '카드'."], ["외장 디스크", "USB로 꽂는 저장 장치예요(외장 하드 · 외장 SSD)."], ["SSD", "빠른 저장 장치예요. 외장 SSD는 USB로 꽂는 것."], ["NAS", "스튜디오 안 인터넷 공유기에 연결해 여러 컴퓨터가 같이 쓰는 저장 상자예요."], ["클라우드", "구글 드라이브 · 네이버 MYBOX처럼 인터넷 너머에 파일을 두는 곳이에요."], ["드라이브", "여기서는 구글 드라이브 같은 인터넷 저장 공간을 말해요."], ["백업", "같은 파일을 다른 곳에도 복사해 두는 것이에요. 한 곳이 망가져도 남게."], ["TB", "저장 용량 단위예요. 1TB = 1,000GB. 사진 3만 장이 1TB쯤 될 수 있어요."], ["본체 번호", "카메라마다 다른 고유 번호예요. 사진 파일 안에 적혀 있어서 '어느 카메라로 찍었는지' 가를 수 있어요."], ["저작권 정보", "카메라 메뉴에 작가 이름을 넣어 두면, 찍는 사진마다 그 이름이 파일 안에 적혀요."], ["기종", "카메라 모델 이름이에요(예: 소니 a7 IV)."], ["시계", "카메라 안 시계예요. 카메라끼리 몇 분씩 어긋나면 사진 시각으로 순서를 맞추기 어려워요."], ["순서표", "대회 날 어느 시간에 어느 종목 · 체급이 무대에 오르는지 적은 표예요."], ["선수 명단", "선수 번호 · 이름 · 종목 · 체급을 적은 목록이에요."], ["체급", "몸무게 등으로 나눈 대회 부문이에요."], ["종목", "대회에서 나누는 경기 갈래예요(예: 남자 보디 · 클래식)."], ["사전 구매", "대회 전에 사진을 미리 산 사람이에요."], ["사후 구매", "대회가 끝난 뒤 연락해서 사진을 사는 것이에요."], ["번호로 꺼내기", "선수 번호만 넣으면 허브가 그 선수 사진을 모아 보낼 폴더를 만들어 주는 기능이에요(이미 있음)."], ["납품", "손님에게 줄 사진을 골라 폴더에 담아 보내는 일이에요. 허브에서는 '꺼내기'라고도 해요."], ["지울 것", "오래된 원본을 바로 지우지 않고 '지울 것' 폴더로 옮겨 두는 허브 기능이에요. 언제든 되돌릴 수 있어요."], ["동의서", "사진 찍기 · 판매 · 얼굴로 찾기 등을 허락받는 서류예요."], ["얼굴로 찾기", "사진 속 얼굴을 비교해 같은 사람 사진을 찾는 기능이에요. 동의를 받은 사람에게만 써야 해요."], ["개인정보", "이름 · 전화번호 · 얼굴처럼 사람을 알아볼 수 있는 정보예요."], ["바깥 AI", "인터넷 너머 회사 서버에서 도는 AI예요. 허브는 기본으로 스튜디오 컴퓨터 안에서만 처리해요."], ["시험판", "아직 다듬는 중인 허브를 써 보게 까는 판이에요."], ["부트캠프", "맥을 껐다 켜서 윈도우로 쓰는 방법이에요."], ["사양", "컴퓨터 성능 정보예요(그래픽 카드 · 메모리 · 저장 공간)."], ["그래픽 카드", "AI 계산을 빠르게 하는 컴퓨터 부품이에요."], ["주최 측", "대회를 여는 단체예요."], ["독점 계약", "그 대회 사진을 한 스튜디오만 찍고 팔 수 있게 한 약속이에요."], ["쇼핑몰", "여기서는 주최 측이 사진 등을 파는 인터넷 가게예요."], ["카톡 채널", "가게용 카카오톡 계정이에요. 여러 손님 상담을 한곳에서 받아요."], ["네이버 예약", "네이버에서 손님이 직접 예약하는 기능이에요."], ["답장 초안", "AI가 미리 써 두는 답장이에요. 보내는 건 늘 사람이 해요."], ["장부", "허브가 사진 · 사람 · 일을 적어 두는 기록이에요(데이터베이스)."], ["대표님 암호", "대표님만 아는 비밀번호로 돈 · 지울 것 같은 중요 화면을 잠그는 것이에요(아직 안 만듦)."], ["정산", "돈 계산이에요. 촬영자 수고비 · 매출 정리 등."], ["외주", "바깥 사람 · 업체에 일을 맡기는 것이에요."], ["보정 지시서", "사진마다 어떻게 보정할지 적은 글 · 그림이에요."], ["디스크 이름표", "외장 디스크마다 붙인 이름이에요(예: 스튜디오SSD-1). 꽂을 때마다 글자(E: · F:)가 바뀌어도 알아보게."], ["폴더 구조", "폴더 안에 폴더가 들어 있는 모양이에요. 카드에서 옮긴 그대로가 시험에 좋아요."], ["정확도", "허브가 맞힌 비율이에요."], ["밤샘 처리", "퇴근할 때 카드를 꽂아 두면 허브가 밤새 정리해 두는 것이에요(구상 중)."], ["확인 요청", "허브가 사람에게 '이거 맞나요?' 하고 묻는 목록이에요."], ["프로젝트", "한 건의 일(대회 하나 · 촬영 한 건)을 묶는 허브 단위예요."], ["가린 캡처", "이름 · 전화번호를 가린 화면 사진이에요."]]; var GMAP={}; GLOSS.forEach(function(g){ GMAP[g[0]]=g[1]; });
+var GRE = new RegExp("("+GLOSS.map(function(g){return g[0]}).sort(function(a,b){return b.length-a.length}).map(function(s){return s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}).join("|")+")","g");
+function gl(s){ var seen={}; return esc(s).replace(GRE,function(m){ if(seen[m]) return m; seen[m]=1; return '<span class="gl" data-g="'+m+'">'+m+'</span>'; }); }
+document.addEventListener("click",function(e){ var g=e.target.closest&&e.target.closest(".gl"); if(!g) return; e.stopPropagation(); e.preventDefault(); var k=g.dataset.g; openSheet(el('<div><h3>'+esc(k)+'</h3><div>'+esc(GMAP[k]||"")+'</div><div class="tools"><button class="btn" onclick="document.getElementById(\'sheet\').classList.remove(\'open\')">알겠어요</button><button class="btn" id="glAll">용어 전체 보기</button></div></div>')); document.getElementById("glAll").onclick=showGloss; }, true);
+function showGloss(){ openSheet(el('<div><h3>용어 풀이</h3><div class="small" style="color:var(--sub);margin-bottom:6px">점선 밑줄이 있는 말을 누르면 이 풀이가 떠요.</div>'+GLOSS.slice().sort(function(a,b){return a[0].localeCompare(b[0],"ko")}).map(function(g){ return '<div class="qn"><b>'+esc(g[0])+'</b> — '+esc(g[1])+'</div>'; }).join("")+'<div class="tools"><button class="btn" onclick="document.getElementById(\'sheet\').classList.remove(\'open\')">닫기</button></div></div>')); }
+
+/* ---------- 화면 안 물음창 (브라우저 알림창을 쓰지 않음 — 앱 안에서 막히는 일 없게) ---------- */
+function ask(msg, opt){ opt=opt||{}; return new Promise(function(res){ var h=el('<div><h3>'+esc(opt.title||"확인")+'</h3><div class="small" style="margin-bottom:10px">'+esc(msg)+'</div>'+(opt.input?'<input type="text" placeholder="'+esc(opt.placeholder||"")+'">':'')+'<div class="tools"><button class="btn pri">'+esc(opt.ok||"네")+'</button><button class="btn">'+esc(opt.cancel||"아니요")+'</button></div></div>');
+  var ip=h.querySelector("input"), bs=h.querySelectorAll(".btn"); var done=false; function fin(v){ if(done) return; done=true; sheet.classList.remove("open"); sheet.onclose=null; res(v); }
+  bs[0].onclick=function(){ fin(opt.input?(ip.value||""):true); }; bs[1].onclick=function(){ fin(opt.input?null:false); };
+  if(ip) ip.onkeydown=function(e){ if(e.key==="Enter") fin(ip.value||""); };
+  sheet.onclose=function(){ fin(opt.input?null:false); }; openSheet(h); if(ip) setTimeout(function(){ ip.focus(); },60); }); }
+function toast(msg){ var tt=document.getElementById("toast"); tt.textContent=msg; tt.classList.add("on"); clearTimeout(tt._t); tt._t=setTimeout(function(){ tt.classList.remove("on"); },2600); }
+function viewImg(src){ var v=document.getElementById("viewer"); v.querySelector("img").src=src; v.classList.add("open"); }
 /* ---------- 그리기 ---------- */
 var main=document.getElementById("main");
 function counts(){ var all=0, done=0, must=0, mdone=0; SECS.forEach(function(s){ D[s[0]].forEach(function(it){ all++; var st=(S.items[it.id]||{}).st; if(st==="asked"||st==="skip") done++; if(s[0]==="K"){ must++; if(st==="asked") mdone++; } }); }); return {all:all,done:done,must:must,mdone:mdone}; }
@@ -226,7 +247,7 @@ function render(){ renderTop(); renderTabs(); var tab=S.ui.tab; main.innerHTML="
  var sec=D.later&&D.later[tab]?D.later[tab]:"";
  L.forEach(function(it){ list.appendChild(card(it)); });
  if(sec) list.appendChild(el('<div class="card nonmust"><div class="head" style="cursor:default"><div class="dot"></div><div class="tt" style="font-weight:500;font-size:14px"><span style="color:var(--sub)">시간 되면 · </span>'+esc(sec)+'</div></div></div>'));
- var ax=list.querySelector("#addX"); if(ax) ax.onclick=function(){ var t=prompt("무슨 이야기였나요? (한 줄)"); if(t){ var id="X"+Date.now(); S.extra.push({id:id,t:t,at:now()}); I(id).st="asked"; I(id).at=now(); S.ui.sel=id; save(); render(); } };
+ var ax=list.querySelector("#addX"); if(ax) ax.onclick=function(){ ask("대표님이 꺼낸, 목록에 없는 이야기를 한 줄로 적어요.",{title:"더하기",input:true,placeholder:"예: 다음 달 대회 촬영 같이 가자고 하심",ok:"더하기",cancel:"그만"}).then(function(t){ if(t){ var id="X"+Date.now(); S.extra.push({id:id,t:t,at:now()}); I(id).st="asked"; I(id).at=now(); S.ui.sel=id; save(); render(); } }); };
  if(window.innerWidth>=900){ var sel=S.ui.sel && findItem(S.ui.sel) && findItem(S.ui.sel).sec===tab ? findItem(S.ui.sel) : L[0]; if(sel){ S.ui.sel=sel.id; pane.appendChild(detail(sel)); markSel(); } else pane.appendChild(el('<div class="empty">왼쪽에서 고르세요.</div>')); }
 }
 function markSel(){ document.querySelectorAll(".card[data-id]").forEach(function(c){ c.classList.toggle("sel", c.dataset.id===S.ui.sel && window.innerWidth>=900); }); }
@@ -241,21 +262,21 @@ function card(it){ var st=(S.items[it.id]||{}).st||"";
 
 function detail(it){ var x=I(it.id); var w=el('<div class="body"></div>');
  if(window.innerWidth>=900) w.appendChild(el('<h2 style="font-size:18px;margin:12px 0 4px">'+esc(it.t)+'</h2>'));
- w.appendChild(el('<p class="why"><b>왜?</b>'+esc(it.why)+'</p>'));
- if(it.tip) w.appendChild(el('<p class="tip"><b>이렇게 물으면 쉬워요</b>'+esc(it.tip)+'</p>'));
+ w.appendChild(el('<p class="why"><b>왜?</b>'+gl(it.why)+'</p>'));
+ if(it.tip) w.appendChild(el('<p class="tip"><b>이렇게 물으면 쉬워요</b>'+gl(it.tip)+'</p>'));
  var stw=el('<div class="status"></div>'); [["asked","물어봄"],["later","나중에"],["skip","안 물어도 됨"]].forEach(function(s){ var b=el('<button class="'+s[0]+(x.st===s[0]?' on':'')+'">'+s[1]+'</button>'); b.onclick=function(){ x.st=(x.st===s[0])?"":s[0]; x.at=now(); save(); render(); }; stw.appendChild(b); }); w.appendChild(stw);
  if(it.br && it.br.length){ w.appendChild(el('<div class="lbl">대표님 대답 — 맞는 것을 눌러요 (여러 개 가능)</div>'));
   it.br.forEach(function(b,i){ var bs=x.br[i]||(x.br[i]={on:false,asked:false,ans:"",sug:false,react:"",memo:""});
    var np=(bs.pens||[]).length;
-   var box=el('<div class="br'+(bs.on?' on':'')+'"><div class="bh"><div class="chk">'+(bs.on?'✓':'')+'</div><div class="a">“'+esc(b.a)+'”'+(np?' <span class="sync">펜 '+np+'</span>':'')+'</div><button class="btn small mine penq" title="이 대답에 펜 메모">✎</button></div><div class="bb"></div></div>');
+   var box=el('<div class="br'+(bs.on?' on':'')+'"><div class="bh"><div class="chk">'+(bs.on?'✓':'')+'</div><div class="a">“'+gl(b.a)+'”'+(np?' <span class="sync">펜 '+np+'</span>':'')+'</div><button class="btn small mine penq" title="이 대답에 펜 메모">✎</button></div><div class="bb"></div></div>');
    box.querySelector(".bh").onclick=function(ev){ if(ev.target.classList.contains("penq")) return; bs.on=!bs.on; if(bs.on && !x.st){ x.st="asked"; x.at=now(); } save(); render(); };
    (function(ii){ box.querySelector(".penq").onclick=function(ev){ ev.stopPropagation(); if(!bs.on){ bs.on=true; if(!x.st){ x.st="asked"; x.at=now(); } save(); } openPad(it.id, it.t+" · “"+b.a+"”", "", null, ii); }; })(i);
    var bb=box.querySelector(".bb");
-   if(b.n){ var r=el('<div class="sub"><div class="k">더 물을 것</div><div class="v">'+esc(b.n)+'<input type="text" placeholder="대답 적기" class="small" style="margin-top:6px"></div><div class="chk'+(bs.asked?' on':'')+'">'+(bs.asked?'✓':'')+'</div></div>');
+   if(b.n){ var r=el('<div class="sub"><div class="k">더 물을 것</div><div class="v">'+gl(b.n)+'<input type="text" placeholder="대답 적기" class="small" style="margin-top:6px"></div><div class="chk'+(bs.asked?' on':'')+'">'+(bs.asked?'✓':'')+'</div></div>');
     var inp=r.querySelector("input"); inp.value=bs.ans||""; inp.oninput=function(){ bs.ans=inp.value; save(); };
     r.querySelector(".chk").onclick=function(){ bs.asked=!bs.asked; save(); render(); }; bb.appendChild(r); }
-   if(b.c) bb.appendChild(el('<div class="sub"><div class="k">바뀌는 것</div><div class="v">'+esc(b.c)+'</div></div>'));
-   if(b.s){ var r2=el('<div class="sub mine"><div class="k" style="color:var(--warn)">제안해 볼 것</div><div class="v">'+esc(b.s)+'<div class="react"></div></div><div class="chk'+(bs.sug?' on':'')+'">'+(bs.sug?'✓':'')+'</div></div>');
+   if(b.c) bb.appendChild(el('<div class="sub"><div class="k">바뀌는 것</div><div class="v">'+gl(b.c)+'</div></div>'));
+   if(b.s){ var r2=el('<div class="sub mine"><div class="k" style="color:var(--warn)">제안해 볼 것</div><div class="v">'+gl(b.s)+'<div class="react"></div></div><div class="chk'+(bs.sug?' on':'')+'">'+(bs.sug?'✓':'')+'</div></div>');
     r2.querySelector(".chk").onclick=function(){ bs.sug=!bs.sug; save(); render(); };
     var rc=r2.querySelector(".react"); [["good","좋대요"],["think","생각해 본대요"],["bad","별로래요"]].forEach(function(q){ var bt=el('<button class="'+(bs.react===q[0]?'on':'')+'">'+q[1]+'</button>'); bt.onclick=function(){ bs.react=(bs.react===q[0])?"":q[0]; bs.sug=true; save(); render(); }; rc.appendChild(bt); });
     bb.appendChild(r2); }
@@ -282,12 +303,12 @@ function detail(it){ var x=I(it.id); var w=el('<div class="body"></div>');
 function fillThumbs(th, x, id){ var list=[].concat((x.pens||[]).map(function(k){return ["pen",k]}),(x.photos||[]).map(function(k){return ["photo",k]}));
  list.forEach(function(p){ var t=el('<div class="th"><img alt=""><button class="x">빼기</button></div>'); th.appendChild(t);
   getBlob(p[1]).then(function(v){ if(v) t.querySelector("img").src=v.png||v.jpg||""; });
-  t.querySelector("img").onclick=function(){ if(p[0]==="pen") openPad(id, (findItem(id)||{t:"펜 메모"}).t, p[1]); else getBlob(p[1]).then(function(v){ if(v){ var wv=window.open(); if(wv) wv.document.write('<img src="'+v.jpg+'" style="max-width:100%">'); } }); };
-  t.querySelector(".x").onclick=function(ev){ ev.stopPropagation(); if(!confirm("이 그림을 목록에서 뺄까요? (이 기기의 저장본은 남겨 둬요)")) return; var arr=p[0]==="pen"?x.pens:x.photos; var i=arr.indexOf(p[1]); if(i>=0) arr.splice(i,1); save(); render(); }; }); }
+  t.querySelector("img").onclick=function(){ if(p[0]==="pen") openPad(id, (findItem(id)||{t:"펜 메모"}).t, p[1]); else getBlob(p[1]).then(function(v){ if(v) viewImg(v.jpg); else toast("이 사진을 이 기기에서 찾지 못했어요"); }); };
+  t.querySelector(".x").onclick=function(ev){ ev.stopPropagation(); ask("이 그림을 목록에서 뺄까요? (이 기기의 저장본은 남겨 둬요)",{ok:"빼기",cancel:"그대로"}).then(function(ok){ if(!ok) return; var arr=p[0]==="pen"?x.pens:x.photos; var i=arr.indexOf(p[1]); if(i>=0) arr.splice(i,1); save(); render(); }); }; }); }
 
 function fillPenThumbs(th, arr, id, title, br){ arr.forEach(function(k){ var t=el('<div class="th"><img alt=""><button class="x">빼기</button></div>'); th.appendChild(t); getBlob(k).then(function(v){ if(v) t.querySelector("img").src=v.png; });
   t.querySelector("img").onclick=function(){ openPad(id, title, k, null, br); };
-  t.querySelector(".x").onclick=function(ev){ ev.stopPropagation(); if(!confirm("이 펜 메모를 목록에서 뺄까요? (이 기기의 저장본은 남겨 둬요)")) return; var i=arr.indexOf(k); if(i>=0) arr.splice(i,1); save(); render(); }; }); }
+  t.querySelector(".x").onclick=function(ev){ ev.stopPropagation(); ask("이 펜 메모를 목록에서 뺄까요? (이 기기의 저장본은 남겨 둬요)",{ok:"빼기",cancel:"그대로"}).then(function(ok){ if(!ok) return; var i=arr.indexOf(k); if(i>=0) arr.splice(i,1); save(); render(); }); }; }); }
 function addPhotos(files, id){ Array.prototype.forEach.call(files, function(f){ var r=new FileReader(); r.onload=function(){ var img=new Image(); img.onload=function(){ var m=1600, s=Math.min(1,m/Math.max(img.width,img.height)); var c=document.createElement("canvas"); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext("2d").drawImage(img,0,0,c.width,c.height); var jpg=c.toDataURL("image/jpeg",0.78);
   var k="ph"+Date.now()+Math.floor(Math.random()*1000); var v={kind:"photo",jpg:jpg,at:now(),item:id}; cache[k]=v; idbPut(k,v); if(db){ try{ db.doc("meet/b_"+k).set({kind:"photo",jpg:jpg,item:id||"",at:v.at}).catch(function(){ setSync("사진을 Claude 쪽에 못 올림(크기) — 넘기기 파일로 보내 주세요"); }); }catch(e){} }
   if(id){ I(id).photos.push(k); } else { S.quick.push({id:"q"+Date.now(),t:"(사진)",at:now(),item:"",tab:S.ui.tab,photo:k}); } save(); render(); }; img.src=r.result; }; r.readAsDataURL(f); }); }
@@ -307,7 +328,7 @@ function renderMemo(){ main.appendChild(el('<div class="sec">빠른 메모 — �
   var c=el('<div class="card"><div class="body" style="border-top:none;padding-top:10px"><div class="tm sync">'+hm(new Date(q.at))+(it?' · '+esc(it.t.slice(0,30)):'')+'</div><textarea rows="2"></textarea><div class="thumbs"></div><div class="tools"><button class="btn danger small">지우기</button></div></div></div>');
   var ta=c.querySelector("textarea"); ta.value=q.t||""; ta.oninput=function(){ q.t=ta.value; save(); };
   var th=c.querySelector(".thumbs"); var ks=[].concat(q.pen?[q.pen]:[], q.photo?[q.photo]:[]); ks.forEach(function(k){ var t=el('<div class="th"><img alt=""></div>'); th.appendChild(t); getBlob(k).then(function(v){ if(v) t.querySelector("img").src=v.png||v.jpg; }); if(q.pen) t.onclick=function(){ openPad("", "빠른 펜 메모", q.pen, q); }; });
-  c.querySelector(".btn").onclick=function(){ if(confirm("이 메모를 지울까요?")){ S.quick.splice(S.quick.indexOf(q),1); save(); render(); } };
+  c.querySelector(".btn").onclick=function(){ ask("이 메모를 지울까요?",{ok:"지우기",cancel:"그대로"}).then(function(ok){ if(ok){ S.quick.splice(S.quick.indexOf(q),1); save(); render(); } }); };
   main.appendChild(c); });
  main.appendChild(el('<div class="sec">미팅 전체 메모</div>')); var g=el('<textarea rows="6" placeholder="분위기 · 대표님 성향 · 다음 약속 · 무엇이든"></textarea>'); g.value=S.general||""; g.oninput=function(){ S.general=g.value; save(); }; main.appendChild(g); }
 
@@ -326,12 +347,12 @@ function renderEnd(){ var c=counts(); var miss=D.K.filter(function(it){ return (
  document.getElementById("eCopy").onclick=function(){ copy(txt); };
  document.getElementById("eFile").onclick=function(){ exportFile(); };
  document.getElementById("eJson").onclick=function(){ download("미팅노트_"+stamp()+".json", JSON.stringify(S,null,1), "application/json"); };
- document.getElementById("eReset").onclick=function(){ if(prompt("정말 모두 지우려면 '지워'라고 적어 주세요")==="지워"){ S={items:{},docs:{},quick:[],extra:[],general:"",start:null,ui:{tab:"K",sel:null,five:false,hide:false}}; save(); render(); } }; }
+ document.getElementById("eReset").onclick=function(){ ask("적어 둔 것이 모두 사라져요. 정말 지우려면 '지워'라고 적어 주세요.",{title:"처음부터",input:true,ok:"지우기",cancel:"그만"}).then(function(v){ if(v==="지워"){ S={items:{},docs:{},quick:[],extra:[],general:"",start:null,ui:{tab:"K",sel:null,five:false,hide:false}}; save(); render(); toast("모두 지웠어요"); } }); }; }
 function stamp(){ var d=new Date(); return d.getFullYear()+("0"+(d.getMonth()+1)).slice(-2)+("0"+d.getDate()).slice(-2)+"_"+("0"+d.getHours()).slice(-2)+("0"+d.getMinutes()).slice(-2); }
-function copy(t){ try{ navigator.clipboard.writeText(t).then(function(){ alert("복사했어요. 방에 붙여 넣어 주세요."); },function(){ fallbackCopy(t); }); }catch(e){ fallbackCopy(t); } }
-function fallbackCopy(t){ var ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); alert("복사했어요."); }catch(e){ alert("복사가 안 돼요 — 아래 글을 길게 눌러 복사해 주세요."); } ta.remove(); }
-function download(name, data, type){ if(window.claude && window.claude.use){ window.claude.use("downloads").then(function(dl){ if(dl){ dl.save({filename:name, data:data}).catch(function(){ alert("저장을 못 했어요. '글 복사'를 써 주세요."); }); } else plainDownload(name,data,type); }).catch(function(){ plainDownload(name,data,type); }); return; } plainDownload(name,data,type); }
-function plainDownload(name, data, type){ try{ var b=new Blob([data],{type:type}); var a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },2000); }catch(e){ alert("이 화면에서는 파일 저장이 막혀 있어요. '글 복사'를 써 주세요."); } }
+function copy(t){ try{ navigator.clipboard.writeText(t).then(function(){ toast("복사했어요 — 방에 붙여 넣어 주세요"); },function(){ fallbackCopy(t); }); }catch(e){ fallbackCopy(t); } }
+function fallbackCopy(t){ var ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select(); var ok=false; try{ ok=document.execCommand("copy"); }catch(e){} toast(ok?"복사했어요 — 방에 붙여 넣어 주세요":"복사가 막혔어요 — 아래 글을 길게 눌러 복사해 주세요"); ta.remove(); }
+function download(name, data, type){ if(window.claude && window.claude.use){ window.claude.use("downloads").then(function(dl){ if(dl){ dl.save({filename:name, data:data}).then(function(){ toast("저장했어요"); }).catch(function(){ toast("저장을 못 했어요 — '글 복사'를 써 주세요"); }); } else plainDownload(name,data,type); }).catch(function(){ plainDownload(name,data,type); }); return; } plainDownload(name,data,type); }
+function plainDownload(name, data, type){ try{ var b=new Blob([data],{type:type}); var a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },2000); toast("파일을 저장했어요(다운로드 폴더)"); }catch(e){ toast("이 화면에서는 파일 저장이 막혀 있어요 — '글 복사'를 써 주세요"); } }
 
 function report(){ var L=[]; L.push("# 대표님 미팅 노트 ("+new Date().toLocaleString("ko-KR")+")"); if(S.start) L.push("시작 "+new Date(S.start).toLocaleString("ko-KR")+" · 경과 "+mins()+"분");
  SECS.concat([["X","더한 것"]]).forEach(function(s){ var arr=itemsOf(s[0]); if(!arr.length) return; L.push("\n## "+s[1]);
@@ -356,7 +377,7 @@ function exportFile(){ var keys=[]; for(var id in S.items){ var x=S.items[id]; (
 /* ---------- 빠른 메모 · 도움 시트 ---------- */
 var sheet=document.getElementById("sheet"), sheetIn=document.getElementById("sheetIn");
 function openSheet(h){ sheetIn.innerHTML=""; sheetIn.appendChild(h); sheet.classList.add("open"); }
-sheet.onclick=function(e){ if(e.target===sheet) sheet.classList.remove("open"); };
+sheet.onclick=function(e){ if(e.target===sheet){ sheet.classList.remove("open"); if(sheet.onclose){ var f=sheet.onclose; sheet.onclose=null; f(); } } };
 document.getElementById("fQuick").onclick=function(){ var it=S.ui.sel?findItem(S.ui.sel):null;
  var h=el('<div><h3>빠른 메모</h3><div class="small" style="color:var(--sub);margin-bottom:6px">'+(it?'지금 보던 물음: '+esc(it.t.slice(0,40)):'어느 물음에도 안 붙어요')+'</div><textarea rows="4" placeholder="들은 것 · 떠오른 것"></textarea><div class="tools"><button class="btn pri">저장</button>'+(it?'<button class="btn">물음 없이 저장</button>':'')+'<button class="btn">사진</button><input type="file" accept="image/*" style="display:none"><button class="btn">닫기</button></div></div>');
  var ta=h.querySelector("textarea"), bs=h.querySelectorAll(".btn");
@@ -367,7 +388,7 @@ document.getElementById("fQuick").onclick=function(){ var it=S.ui.sel?findItem(S
  openSheet(h); setTimeout(function(){ ta.focus(); },50); };
 document.getElementById("fPen").onclick=function(){ var it=S.ui.sel?findItem(S.ui.sel):null; openPad(it?it.id:"", it?it.t:"빠른 펜 메모"); };
 document.getElementById("bHelp").onclick=function(){ openSheet(el('<div><h3>상황별 도움</h3>'+
- [["대표님이 바쁘세요 (5분)","위 \"5분 모드\" — 꼭 3가지만 남아요. 마무리 탭에서 빠진 꼭을 확인."],
+ [["모르는 말이 나와요","점선 밑줄이 있는 말을 누르면 뜻이 떠요. 아래 \"용어 풀이 보기\"로 전체를 볼 수 있어요."],["대표님이 바쁘세요 (5분)","위 \"5분 모드\" — 꼭 3가지만 남아요. 마무리 탭에서 빠진 꼭을 확인."],
   ["대표님과 화면을 같이 봐요","위 \"같이 보기\" — 내 메모 · 원문 칸 · 제안 · 펜 단추가 숨고, 그림 · 허브 화면만 펼쳐져요. 끝나면 다시 눌러 끄기."],
   ["이야기가 다른 데로 새요","\"빠른 메모\"로 한 줄 — 보던 물음에 붙거나 따로 남아요. 나중에 \"메모\" 탭에서 모아 봐요."],
   ["대답이 목록에 없어요","물음 안 \"다른 대답이었어요\"에 그대로 적기. 목록에 없는 새 이야기는 \"더한 것\" 탭에서 + 더하기."],
@@ -375,10 +396,10 @@ document.getElementById("bHelp").onclick=function(){ openSheet(el('<div><h3>상�
   ["자료를 바로 받았어요 · 화면을 찍어야 해요","\"자료\" 탭에서 받음 체크. 물음 안 \"📷 사진 붙이기\"로 화면 · 서류를 찍어 두기(대표님 허락 받고)."],
   ["와이파이가 없어요","이 기기에 계속 저장돼요. 다음에 연결되면 Claude 쪽으로 올라가요. 파일로 연 판이면 \"마무리\"에서 파일로 저장."],
   ["순서가 뒤죽박죽이에요","탭 어디서든 눌러 물어요. 점 색: 초록 물어봄 · 노랑 나중에 · 회색 안 물어도 됨."],
-  ["끝날 때","\"마무리 · 넘기기\" 탭 — 못 한 꼭 · 나중에로 둔 것 확인, 다음 약속 적기."]].map(function(r){ return '<div class="qn"><b>'+esc(r[0])+'</b><br>'+esc(r[1])+'</div>'; }).join("")+'<div class="tools"><button class="btn" onclick="document.getElementById(\'sheet\').classList.remove(\'open\')">닫기</button></div></div>')); };
+  ["끝날 때","\"마무리 · 넘기기\" 탭 — 못 한 꼭 · 나중에로 둔 것 확인, 다음 약속 적기."]].map(function(r){ return '<div class="qn"><b>'+esc(r[0])+'</b><br>'+esc(r[1])+'</div>'; }).join("")+'<div class="tools"><button class="btn pri" id="hGloss">용어 풀이 보기</button><button class="btn" onclick="document.getElementById(\'sheet\').classList.remove(\'open\')">닫기</button></div></div>')); document.getElementById("hGloss").onclick=showGloss; };
 document.getElementById("b5").onclick=function(){ S.ui.five=!S.ui.five; if(S.ui.five) S.ui.tab="K"; save(); render(); };
 document.getElementById("bHide").onclick=function(){ S.ui.hide=!S.ui.hide; save(); render(); };
-document.getElementById("bTimer").onclick=function(){ if(!S.start){ S.start=now(); save(); renderTop(); } else if(confirm("시작 시각을 지금으로 다시 맞출까요?")){ S.start=now(); save(); renderTop(); } };
+document.getElementById("bTimer").onclick=function(){ if(!S.start){ S.start=now(); save(); renderTop(); } else ask("시작 시각을 지금으로 다시 맞출까요?",{ok:"다시 맞추기",cancel:"그대로"}).then(function(ok){ if(ok){ S.start=now(); save(); renderTop(); } }); };
 setInterval(renderTop, 30000);
 
 /* ---------- 펜 ---------- */
@@ -391,7 +412,7 @@ function drawStroke(c,s,w,h){ var p=s.p; if(!p.length) return; c.strokeStyle=s.c
  for(var i=1;i<p.length;i++){ var a=p[i-1], b=p[i]; var pr=(a[2]+b[2])/2||0.5; c.lineWidth=Math.max(0.6, s.w*(0.55+pr*0.9)); c.beginPath(); c.moveTo(a[0]*w,a[1]*h); c.lineTo(b[0]*w,b[1]*h); c.stroke(); } }
 function redraw(){ paper(ctx,P.W,P.H); P.strokes.forEach(function(s){ drawStroke(ctx,s,P.W,P.H); }); }
 function pt(e){ var r=cv.getBoundingClientRect(); return [ (e.clientX-r.left)/r.width, (e.clientY-r.top)/r.height, e.pressure||0.5 ]; }
-cv.addEventListener("pointerdown",function(e){ if(e.pointerType==="pen") P.penSeen=true; if(P.penSeen && e.pointerType==="touch") return; e.preventDefault(); cv.setPointerCapture(e.pointerId);
+cv.addEventListener("pointerdown",function(e){ if(e.pointerType==="pen") P.penSeen=true; if(P.penSeen && e.pointerType==="touch") return; e.preventDefault(); try{ cv.setPointerCapture(e.pointerId); }catch(er){}
  var q=pt(e); if(P.erase){ eraseAt(q); P.cur={erase:true}; return; } P.cur={c:P.color,w:P.wide?6:2.6,p:[q]}; P.strokes.push(P.cur); P.undo=[]; redraw(); });
 cv.addEventListener("pointermove",function(e){ if(!P.cur) return; if(P.penSeen && e.pointerType==="touch") return; e.preventDefault();
  var evs=(e.getCoalescedEvents&&e.getCoalescedEvents())||[]; if(!evs.length) evs=[e]; if(P.cur.erase){ eraseAt(pt(e)); return; }
