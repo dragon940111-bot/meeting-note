@@ -170,7 +170,7 @@ var S = {items:{}, docs:{}, quick:[], extra:[], general:"", start:null, ui:{tab:
 try{ var raw=localStorage.getItem(KEY); if(raw){ var o=JSON.parse(raw); for(var k in o) S[k]=o[k]; } }catch(e){}
 function I(id){ if(!S.items[id]) S.items[id]={st:"",br:{},other:"",quote:"",mine:"",pens:[],photos:[],at:null}; return S.items[id]; }
 var saveT=null, dirty=false;
-function save(){ dirty=true; try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} clearTimeout(saveT); saveT=setTimeout(pushDb, 1500); setSync("이 기기에 저장됨"); }
+function save(){ dirty=true; try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} clearTimeout(saveT); saveT=setTimeout(pushDb, 1500); if(typeof SB_ON!=="undefined" && SB_ON){ sbDirty=true; clearTimeout(save._sb); save._sb=setTimeout(function(){ sbPush(false); },2500); sbShow(); } else setSync("이 기기에 저장됨"); }
 function setSync(t){ var el=document.getElementById("syncTxt"); if(el) el.textContent=t; }
 
 /* IndexedDB: 펜 · 사진 */
@@ -185,12 +185,38 @@ function getBlob(k){ if(cache[k]) return Promise.resolve(cache[k]); return idbGe
 var db=null, dbTried=false;
 function dbInit(){ try{ if(window.claude && window.claude.use){ var t=setTimeout(function(){ if(!db){ setSync("이 기기에만 저장 중(연결 안 됨)"); } },10000);
   window.claude.use("db").then(function(x){ clearTimeout(t); db=x; dbTried=true; if(db){ setSync("Claude 쪽에도 저장해요"); pushDb(); } else setSync("이 기기에만 저장 중"); }).catch(function(){ clearTimeout(t); setSync("이 기기에만 저장 중"); }); }
-  else setSync("이 기기에만 저장 중(파일로 연 판)"); }catch(e){ setSync("이 기기에만 저장 중"); } }
+  else if(SB_ON){ sbShow(); sbPush(false); } else setSync("이 기기에만 저장 중(파일로 연 판)"); }catch(e){ setSync("이 기기에만 저장 중"); } }
 var pushing=false;
 function pushDb(){ if(!db||pushing||!dirty) return; pushing=true; dirty=false;
  try{ db.doc("meet/state").set({json:JSON.stringify(S), at:new Date().toISOString(), text:report()}).then(function(){ pushing=false; setSync("Claude 쪽 저장 "+hm(new Date())); if(dirty) pushDb(); }).catch(function(){ pushing=false; dirty=true; setSync("Claude 쪽 저장 실패 — 이 기기에는 있어요"); }); }
  catch(e){ pushing=false; } }
 function pushBlob(k,v){ if(!db) return; try{ db.doc("meet/b_"+k).set({kind:v.kind, png:v.png||"", strokes:v.strokes?JSON.stringify(v.strokes):"", w:v.w||0, h:v.h||0, at:v.at||""}).catch(function(){ setSync("그림 하나를 Claude 쪽에 못 올림 — 넘기기 파일로 보내 주세요"); }); }catch(e){} }
+
+/* GitHub 판: Supabase로 자동 올림(쓰기만 됨 · 읽기는 막힘) — Claude가 읽는다 */
+var SB_URL="https://dgegmcalgnqjwpvseqys.supabase.co/rest/v1", SB_KEY="sb_publishable_2w0Mj3Uz_Wu3-4aSjf3Agw_GBN75nLs";
+var SB_ON=!(window.claude && window.claude.use) && /^https?:/.test(location.protocol);
+var NOTE_ID=(function(){ try{ var v=localStorage.getItem("meet1121_noteid"); if(!v){ v="n"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); localStorage.setItem("meet1121_noteid",v); } return v; }catch(e){ return "n_nostore_"+Date.now().toString(36); } })();
+var sbDirty=true, sbBusy=false, sbLast=null, sbFail=0, sbUp={};
+try{ sbUp=JSON.parse(localStorage.getItem("meet1121_up")||"{}")||{}; }catch(e){}
+function sbPost(table, body, keep){ return fetch(SB_URL+"/"+table,{method:"POST",keepalive:!!keep,headers:{"apikey":SB_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify(body)}).then(function(r){ if(r.status===201||r.status===409) return true; throw new Error("http "+r.status); }); }
+function sbKeys(){ var keys=[]; for(var id in S.items){ var x=S.items[id]; (x.pens||[]).forEach(function(k){keys.push(k)}); (x.photos||[]).forEach(function(k){keys.push(k)}); (x.otherPens||[]).forEach(function(k){keys.push(k)}); for(var bi in (x.br||{})){ ((x.br[bi]||{}).pens||[]).forEach(function(k){keys.push(k)}); } } S.quick.forEach(function(q){ if(q.pen) keys.push(q.pen); if(q.photo) keys.push(q.photo); }); return keys; }
+function sbShow(){ if(!SB_ON) return; setSync(sbLast?("Claude가 볼 수 있게 올림 "+hm(sbLast)+(sbDirty?" · 새로 적은 것 올리는 중":"")):(sbFail?"올리기 실패 — 이 기기에는 있어요(인터넷 확인)":"Claude가 볼 수 있게 올리는 중…")); }
+function sbPush(keep){ if(!SB_ON||sbBusy) return Promise.resolve(); if(!sbDirty) return sbBlobs(); sbBusy=true; sbDirty=false;
+ var body={note_id:NOTE_ID, device:(navigator.userAgent||"").slice(0,190), state:S, report:report()};
+ return sbPost("meet_snap", body, keep).then(function(){ sbBusy=false; sbFail=0; sbLast=new Date(); sbShow(); return sbBlobs(); }).catch(function(){ sbBusy=false; sbDirty=true; sbFail++; sbShow(); }); }
+function sbBlobs(){ var ks=sbKeys(); var chain=Promise.resolve();
+ ks.forEach(function(k){ chain=chain.then(function(){ return getBlob(k).then(function(v){ if(!v) return; var ver=k+"@"+String(v.at||"").replace(/\D/g,"").slice(-14); if(sbUp[ver]) return;
+   var meta={}; for(var f in v){ if(f!=="png"&&f!=="jpg") meta[f]=v[f]; } var mt=JSON.stringify(meta); if(mt.length>1800000) meta={kind:v.kind,item:v.item,at:v.at,note:"획 자료가 커서 뺌"};
+   return sbPost("meet_blob",{note_id:NOTE_ID, key:ver.slice(0,80), meta:meta, data:(v.png||v.jpg||"")}).then(function(){ sbUp[ver]=1; try{ localStorage.setItem("meet1121_up", JSON.stringify(sbUp)); }catch(e){} }); }); }).catch(function(){ sbFail++; sbShow(); }); });
+ return chain; }
+if(SB_ON){ setInterval(function(){ sbPush(false); }, 12000);
+ document.addEventListener("visibilitychange", function(){ if(document.visibilityState==="hidden") sbPush(true); });
+ window.addEventListener("online", function(){ sbPush(false); }); }
+/* GitHub 판: 새 판 알림 */
+var BUILD="20261121095350";
+function checkNew(){ if(!SB_ON) return; fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){ return r.ok?r.text():""; }).then(function(t){ t=(t||"").trim(); if(t && t!==BUILD && !document.getElementById("newBar")){ var b=el('<div id="newBar" style="position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:9999;background:#2f6fed;color:#fff;padding:10px 16px;border-radius:12px;font-size:15px;box-shadow:0 6px 20px rgba(0,0,0,.25)">새 판이 있어요 — 눌러서 바꾸기 (적은 것은 그대로예요)</div>'); b.onclick=function(){ sbPush(true); setTimeout(function(){ location.reload(); },400); }; document.body.appendChild(b); } }).catch(function(){}); }
+window.__meetTest={sbPush:sbPush, checkNew:checkNew};
+if(SB_ON){ setTimeout(checkNew, 3000); setInterval(checkNew, 60000); document.addEventListener("visibilitychange", function(){ if(document.visibilityState==="visible") checkNew(); }); }
 
 /* ---------- 도우미 ---------- */
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]}); }
@@ -338,7 +364,7 @@ function renderEnd(){ var c=counts(); var miss=D.K.filter(function(it){ return (
  w.appendChild(el('<div class="sec">끝내기 전에</div>'));
  w.appendChild(el('<div class="card"><div class="body" style="border-top:none;padding-top:10px">'+(miss.length?'<b style="color:var(--no)">아직 못 한 꼭</b><ul>'+miss.map(function(it){return '<li>'+esc(it.t)+'</li>'}).join("")+'</ul>':'<b style="color:var(--ok)">꼭 3가지 다 했어요 ✓</b>')+(later.length?'<b>나중에로 둔 것</b><ul>'+later.map(function(it){return '<li>'+esc(it.t)+'</li>'}).join("")+'</ul>':'')+'<div class="small" style="color:var(--sub)">다음에 만날 날 · 자료 받을 날을 "자료" 탭의 약속 칸에 적어 두세요.</div></div></div>'));
  w.appendChild(el('<div class="sec">Claude에게 넘기기</div>'));
- w.appendChild(el('<div class="card"><div class="body" style="border-top:none;padding-top:10px"><div class="small">① 연결돼 있으면 Claude 쪽에 저절로 저장돼요 — 방에 <b>"미팅 노트 봐"</b>라고만 하면 돼요. 상태: <span id="st2"></span><br>② 아니면 아래 "글 복사"로 붙여 넣거나, "파일로 저장"한 파일을 방에 올려 주세요(펜 · 사진 포함).</div><div class="tools"><button class="btn pri" id="eCopy">글 복사</button><button class="btn" id="eFile">파일로 저장(펜 · 사진 포함)</button><button class="btn" id="eJson">자료 파일(JSON)</button></div><pre id="ePre"></pre></div></div>'));
+ w.appendChild(el('<div class="card"><div class="body" style="border-top:none;padding-top:10px"><div class="small">① 연결돼 있으면(Claude 판이든 GitHub 판이든) Claude가 볼 수 있는 곳에 저절로 올라가요 — 방에 <b>"미팅 노트 봐"</b>라고만 하면 돼요. 상태: <span id="st2"></span><br>② 아니면 아래 "글 복사"로 붙여 넣거나, "파일로 저장"한 파일을 방에 올려 주세요(펜 · 사진 포함).</div><div class="tools"><button class="btn pri" id="eCopy">글 복사</button><button class="btn" id="eFile">파일로 저장(펜 · 사진 포함)</button><button class="btn" id="eJson">자료 파일(JSON)</button></div><pre id="ePre"></pre></div></div>'));
  w.appendChild(el('<div class="sec">기타</div>'));
  w.appendChild(el('<div class="card"><div class="body" style="border-top:none;padding-top:10px"><div class="tools"><button class="btn danger" id="eReset">처음부터(모두 지우기)</button></div></div></div>'));
  main.appendChild(w);
